@@ -8,23 +8,23 @@ Turns kanji **stroke data into brush-like calligraphy drawn by a 3D printer**. E
 
 **Prototype / experiment.** Two independent implementations of the same idea: the browser version (`index.html`) is the more complete one; the Python/tkinter version is an earlier, simpler take. No tests. Whether the output prints well is untested beyond the author's own experiments.
 
-✅ **Works**
+**Works**
 - Fetch stroke SVGs for typed characters from animCJK (Japanese set) with KanjiVG as fallback (needs internet)
 - Parse SVG paths (lines, cubic / quadratic Béziers) into point sequences; width from local curvature × a curvature factor
 - Per-stroke start/end effects: *tome* (入り/止め), *hane* (はね), *harai* (はらい taper)
 - Preview, stroke selection, and point editing (drag / add / delete) in both versions
 - G-code export (`.gcode`) with extrusion computed from width × layer height
 
-🚧 **Partial or rough**
+**Partial or rough**
 - **Browser version**: horizontal / vertical (縦書き) layout, character size / spacing / line spacing / chars per line, drag-to-move, layer height & Z height, speed, optional retraction, and a Bambu-style start G-code block. Output is plain `.gcode`; how it is sent to the A1 mini is up to you (untested paths)
 - **Python version**: generic Marlin-style start/end G-code (`G28`, `M104`, …) rather than Bambu's; all settings hard-coded in `GCodeGenerator`
 
-📝 **Not implemented yet**
+**Not implemented yet**
 - Multi-layer / raised-relief output — everything is a single layer (`total layer number: 1`)
 - Reading `printer_config.json` — neither version loads it; it documents the intended profiles only
 - Offline stroke data / caching
 
-⚠️ **Known issues & limitations**
+**Known issues & limitations**
 - Python version: every character is drawn at the same bed position (fixed centre offset), so multi-character input overlaps; use the browser version for text
 - Python version: extrusion is computed for a 0.06 mm layer while the nozzle is placed at Z 0.2 mm — expect thin lines unless you edit `GCodeGenerator`
 - Python version: changing the width sliders recomputes strokes from the SVG, discarding manual point edits
