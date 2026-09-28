@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>書道3Dプリンター</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            gap: 15px;
+            padding: 15px;
+            height: 100vh;
+        }
+        .panel {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        h2 {
+            font-size: 14px;
+            color: #0f4c75;
+            background: #3282b8;
+            padding: 8px 12px;
+            border-radius: 5px;
+            margin-bottom: 12px;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        input[type="text"], input[type="number"], select, textarea {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #3282b8;
+            border-radius: 5px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 14px;
+        }
+        input[type="text"]:focus, input[type="number"]:focus, textarea:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+        .char-input {
+            font-size: 18px;
+            text-align: left;
+            padding: 10px;
+            width: 100%;
+            font-family: serif;
+        }
+        textarea.char-input {
+            min-height: 100px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: #3282b8;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 8px;
+        }
+        button:hover {
+            background: #0f4c75;
+        }
+        button.primary {
+            background: #e94560;
+        }
+        button.primary:hover {
+            background: #c73e54;
+        }
+        .stroke-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #0f3460;
+            border-radius: 5px;
+        }
+        .stroke-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #16213e;
+            font-size: 13px;
+        }
+        .stroke-item:hover {
+            background: #1a1a4e;
+        }
+        .stroke-item.selected {
+            background: #3282b8;
+        }
+        .slider-container {
+            margin-bottom: 15px;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin-top: 5px;
+        }
+        .slider-value {
+            text-align: right;
+            font-size: 12px;
+            color: #3282b8;
+        }
+        .effect-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .effect-row > div {
+            flex: 1;
+        }
+        #preview-canvas {
+            background: #fff;
+            border-radius: 10px;
+            cursor: crosshair;
+        }
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: calc(100% - 50px);
+        }
+        #gcode-preview {
+            width: 100%;
+            height: 300px;
+            background: #0a0a1a;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            border: 1px solid #3282b8;
+            border-radius: 5px;
+            padding: 10px;
+            resize: none;
+        }
+        .point-editor {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .point-editor > div:last-child {
+            grid-column: span 2;
+        }
+        .info-text {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(50, 130, 184, 0.9);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            display: none;
+        }
+        .status.show {
+            display: block;
+        }
+        .progress-container {
+            display: none;
+            margin-top: 10px;
+        }
+        .progress-container.show {
+            display: block;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #0f3460;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3282b8, #00d9ff);
+            width: 0%;
+            transition: width 0.2s ease;
+        }
+        .progress-text {
+            font-size: 12px;
+            color: #aaa;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 左パネル：入力と設定 -->
+        <div class="panel">
+            <div class="section">
+                <h2>文字入力</h2>
+                <textarea id="char-input" class="char-input" placeholder="永&#10;春風に&#10;吹かれて" rows="5" style="resize: vertical; font-size: 18px; line-height: 1.5;"></textarea>
+                <p class="info-text">改行で区切ると複数行として扱われます</p>
+                <button id="extract-btn" onclick="extractPaths()" class="primary">パス抽出</button>
+                <div class="progress-container" id="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-text" id="progress-text">0 / 0 文字</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>ストローク一覧</h2>
+                <div class="stroke-list" id="stroke-list"></div>
+            </div>
+
+            <div class="section">
+                <h2>効果設定</h2>
+                <div class="effect-row">
+                    <div>
+                        <label>始点</label>
+                        <select id="start-effect" onchange="onEffectChange()">
+                            <option value="none">なし</option>
+                            <option value="tome">とめ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>終点</label>
+                        <select id="end-effect" onchange="onEffectChange()">
+                            <option value="none">なし</option>
+                            <option value="tome">とめ</option>
+                            <option value="hane">はね</option>
+                            <option value="harai">はらい</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>太さ調整</h2>
+                <div class="slider-container">
+                    <label>基本太さ</label>
+                    <input type="range" id="base-width" min="0.1" max="0.5" step="0.01" value="0.22" oninput="onWidthChange()">
+                    <div class="slider-value" id="base-width-value">0.22mm</div>
+                </div>
+                <div class="slider-container">
+                    <label>曲率係数（大きいほど曲線部が太くなる）</label>
+                    <input type="range" id="curve-factor" min="0" max="10" step="0.5" value="2" oninput="onWidthChange()">
+                    <div class="slider-value" id="curve-factor-value">2.0</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>レイアウト設定</h2>
+                <div class="slider-container">
+                    <label>書字方向</label>
+                    <select id="writing-direction" onchange="onLayoutChange()">
+                        <option value="horizontal">横書き（左→右、上→下）</option>
+                        <option value="vertical">縦書き（上→下、右→左）</option>
+                    </select>
+                </div>
+                <div class="slider-container">
+                    <label>文字サイズ (mm)</label>
+                    <input type="range" id="char-size" min="5" max="50" step="1" value="15" oninput="onLayoutChange()">
+                    <div class="slider-value" id="char-size-value">15mm</div>
+                </div>
+                <div class="slider-container">
+                    <label>文字間隔 (mm)</label>
+                    <input type="range" id="char-spacing" min="0" max="20" step="0.5" value="2" oninput="onLayoutChange()">
+                    <div class="slider-value" id="char-spacing-value">2mm</div>
+                </div>
+                <div class="slider-container">
+                    <label>行間隔 (mm)</label>
+                    <input type="range" id="line-spacing" min="0" max="30" step="0.5" value="5" oninput="onLayoutChange()">
+                    <div class="slider-value" id="line-spacing-value">5mm</div>
+                </div>
+                <div class="slider-container">
+                    <label>1行の文字数</label>
+                    <input type="range" id="chars-per-line" min="1" max="20" step="1" value="5" oninput="onLayoutChange()">
+                    <div class="slider-value" id="chars-per-line-value">5文字</div>
+                </div>
+                <div class="slider-container">
+                    <label>開始位置X (mm)</label>
+                    <input type="range" id="start-x" min="5" max="170" step="1" value="10" oninput="onLayoutChange()">
+                    <div class="slider-value" id="start-x-value">10mm</div>
+                </div>
+                <div class="slider-container">
+                    <label>開始位置Y (mm)</label>
+                    <input type="range" id="start-y" min="5" max="170" step="1" value="10" oninput="onLayoutChange()">
+                    <div class="slider-value" id="start-y-value">10mm</div>
+                </div>
+                <p class="info-text">プレビュー上で文字の塊をドラッグして移動できます</p>
+            </div>
+
+            <div class="section">
+                <h2>G-code設定</h2>
+                <label>レイヤー高さ</label>
+                <select id="layer-height">
+                    <option value="0.06">0.06mm (高精度)</option>
+                    <option value="0.10" selected>0.10mm (標準)</option>
+                    <option value="0.14">0.14mm (ドラフト)</option>
+                </select>
+
+                <label style="margin-top:10px">Z軸高さ (mm)</label>
+                <input type="number" id="z-height" value="0.10" min="0.02" max="1.0" step="0.01">
+                <p class="info-text">ノズルとベッドの距離（通常はレイヤー高さと同じ）</p>
+
+                <label style="margin-top:10px">印刷速度 (mm/s)</label>
+                <input type="number" id="print-speed" value="5" min="1" max="50">
+
+                <div style="margin-top:15px">
+                    <label style="display:inline-flex; align-items:center; cursor:pointer;">
+                        <input type="checkbox" id="enable-retract" checked style="width:auto; margin-right:8px;">
+                        筆画ごとにリトラクト
+                    </label>
+                    <p class="info-text">オフにすると筆画間でフィラメントを引き戻さない</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>ベッド情報</h2>
+                <p class="info-text">ベッドサイズ: 180 x 180 mm</p>
+                <p class="info-text">グリッド: 10mm間隔</p>
+            </div>
+        </div>
+
+        <!-- 中央パネル：プレビュー -->
+        <div class="panel">
+            <h2>プレビュー</h2>
+            <div class="canvas-container">
+                <canvas id="preview-canvas" width="600" height="600"></canvas>
+            </div>
+        </div>
+
+        <!-- 右パネル：点の編集とG-code -->
+        <div class="panel">
+            <div class="section">
+                <h2>選択点の編集</h2>
+                <div class="point-editor">
+                    <div>
+                        <label>X座標</label>
+                        <input type="number" id="point-x" step="0.5" onchange="onPointEdit()">
+                    </div>
+                    <div>
+                        <label>Y座標</label>
+                        <input type="number" id="point-y" step="0.5" onchange="onPointEdit()">
+                    </div>
+                    <div>
+                        <label>太さ (mm)</label>
+                        <input type="number" id="point-width" step="0.01" min="0.05" onchange="onPointEdit()">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:10px">
+                    <button onclick="addPoint()">点を追加</button>
+                    <button onclick="deletePoint()">点を削除</button>
+                </div>
+                <p class="info-text">キャンバス上で点をクリック＆ドラッグで移動できます</p>
+            </div>
+
+            <div class="section">
+                <h2>G-code出力</h2>
+                <button onclick="generateGcode()" class="primary">G-code生成</button>
+                <button onclick="downloadGcode()">G-codeをダウンロード</button>
+                <textarea id="gcode-preview" readonly></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <script>
+        // ==================== データ構造 ====================
+        let characters = [];
+        let selectedCharIndex = -1;
+        let selectedStrokeIndex = -1;
+        let selectedPointIndex = -1;
+        let isDragging = false;
+        let isDraggingLayout = false;  // 文字の塊全体をドラッグ中
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let dragStartLayoutX = 0;
+        let dragStartLayoutY = 0;
+
+        const canvas = document.getElementById('preview-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // ==================== SVGパース ====================
+        function parseSVGPath(d) {
+            const paths = [];
+            let currentPath = [];
+            let currentX = 0, currentY = 0;
+            let startX = 0, startY = 0;
+
+            const tokens = d.match(/([MmLlHhVvCcSsQqTtAaZz])|(-?\d*\.?\d+)/g) || [];
+            let i = 0;
+            let cmd = null;
+
+            while (i < tokens.length) {
+                const token = tokens[i];
+
+                if (/[MmLlHhVvCcSsQqTtAaZz]/.test(token)) {
+                    cmd = token;
+                    i++;
+                    continue;
+                }
+
+                const getNum = () => parseFloat(tokens[i++] || 0);
+
+                if (cmd === 'M' || cmd === 'm') {
+                    let x = getNum(), y = getNum();
+                    if (cmd === 'm') { x += currentX; y += currentY; }
+                    if (currentPath.length) paths.push(currentPath);
+                    currentPath = [{x, y}];
+                    currentX = startX = x;
+                    currentY = startY = y;
+                    cmd = cmd === 'M' ? 'L' : 'l';
+                } else if (cmd === 'L' || cmd === 'l') {
+                    let x = getNum(), y = getNum();
+                    if (cmd === 'l') { x += currentX; y += currentY; }
+                    currentPath.push({x, y});
+                    currentX = x; currentY = y;
+                } else if (cmd === 'H') {
+                    currentX = getNum();
+                    currentPath.push({x: currentX, y: currentY});
+                } else if (cmd === 'h') {
+                    currentX += getNum();
+                    currentPath.push({x: currentX, y: currentY});
+                } else if (cmd === 'V') {
+                    currentY = getNum();
+                    currentPath.push({x: currentX, y: currentY});
+                } else if (cmd === 'v') {
+                    currentY += getNum();
+                    currentPath.push({x: currentX, y: currentY});
+                } else if (cmd === 'C' || cmd === 'c') {
+                    let x1 = getNum(), y1 = getNum();
+                    let x2 = getNum(), y2 = getNum();
+                    let x = getNum(), y = getNum();
+                    if (cmd === 'c') {
+                        x1 += currentX; y1 += currentY;
+                        x2 += currentX; y2 += currentY;
+                        x += currentX; y += currentY;
+                    }
+                    const bezierPts = cubicBezier({x: currentX, y: currentY}, {x: x1, y: y1}, {x: x2, y: y2}, {x, y}, 15);
+                    currentPath.push(...bezierPts.slice(1));
+                    currentX = x; currentY = y;
+                } else if (cmd === 'Q' || cmd === 'q') {
+                    let x1 = getNum(), y1 = getNum();
+                    let x = getNum(), y = getNum();
+                    if (cmd === 'q') {
+                        x1 += currentX; y1 += currentY;
+                        x += currentX; y += currentY;
+                    }
+                    const bezierPts = quadBezier({x: currentX, y: currentY}, {x: x1, y: y1}, {x, y}, 15);
+                    currentPath.push(...bezierPts.slice(1));
+                    currentX = x; currentY = y;
+                } else if (cmd === 'S' || cmd === 's') {
+                    let x2 = getNum(), y2 = getNum();
+                    let x = getNum(), y = getNum();
+                    if (cmd === 's') {
+                        x2 += currentX; y2 += currentY;
+                        x += currentX; y += currentY;
+                    }
+                    const bezierPts = cubicBezier({x: currentX, y: currentY}, {x: currentX, y: currentY}, {x: x2, y: y2}, {x, y}, 15);
+                    currentPath.push(...bezierPts.slice(1));
+                    currentX = x; currentY = y;
+                } else if (cmd === 'Z' || cmd === 'z') {
+                    currentPath.push({x: startX, y: startY});
+                    paths.push(currentPath);
+                    currentPath = [];
+                    currentX = startX; currentY = startY;
+                } else {
+                    i++;
+                }
+            }
+
+            if (currentPath.length) paths.push(currentPath);
+            return paths;
+        }
+
+        function cubicBezier(p0, p1, p2, p3, n) {
+            const pts = [];
+            for (let i = 0; i <= n; i++) {
+                const t = i / n;
+                const mt = 1 - t;
+                pts.push({
+                    x: mt*mt*mt*p0.x + 3*mt*mt*t*p1.x + 3*mt*t*t*p2.x + t*t*t*p3.x,
+                    y: mt*mt*mt*p0.y + 3*mt*mt*t*p1.y + 3*mt*t*t*p2.y + t*t*t*p3.y
+                });
+            }
+            return pts;
+        }
+
+        function quadBezier(p0, p1, p2, n) {
+            const pts = [];
+            for (let i = 0; i <= n; i++) {
+                const t = i / n;
+                const mt = 1 - t;
+                pts.push({
+                    x: mt*mt*p0.x + 2*mt*t*p1.x + t*t*p2.x,
+                    y: mt*mt*p0.y + 2*mt*t*p1.y + t*t*p2.y
+                });
+            }
+            return pts;
+        }
+
+        // ==================== 曲率計算 ====================
+        function calculateCurvature(p1, p2, p3) {
+            const a = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            const b = Math.hypot(p3.x - p2.x, p3.y - p2.y);
+            const c = Math.hypot(p3.x - p1.x, p3.y - p1.y);
+
+            // 点間距離が短すぎる場合は曲率0（密集点での異常値を防ぐ）
+            const minDist = 1.0;  // SVG単位で最低1.0の距離が必要
+            if (a < minDist || b < minDist) return 0;
+            if (c < 0.001) return 0;
+
+            const s = (a + b + c) / 2;
+            const areaSq = s * (s - a) * (s - b) * (s - c);
+            if (areaSq <= 0) return 0;
+
+            const curvature = 4 * Math.sqrt(areaSq) / (a * b * c);
+
+            // 曲率の上限を設定（異常に高い曲率を抑制）
+            return Math.min(curvature, 0.3);
+        }
+
+        function pointsToStroke(points, baseWidth, curveFactor) {
+            const stroke = {
+                points: [],
+                startEffect: 'none',
+                endEffect: 'none'
+            };
+
+            for (let i = 0; i < points.length; i++) {
+                let curvature = 0;
+
+                // 始点・終点付近は曲率計算をスキップ（効果で別途処理）
+                const margin = Math.max(3, Math.floor(points.length * 0.1));
+                if (i >= margin && i < points.length - margin) {
+                    curvature = calculateCurvature(points[i-1], points[i], points[i+1]);
+                }
+
+                // 太さ計算: 最大1.5倍まで
+                let width = baseWidth * (1 + curvature * curveFactor);
+                width = Math.min(width, baseWidth * 1.5);
+
+                stroke.points.push({
+                    x: points[i].x,
+                    y: points[i].y,
+                    width: width,
+                    curvature: curvature
+                });
+            }
+
+            return stroke;
+        }
+
+        function applyEffects(stroke) {
+            const n = stroke.points.length;
+            if (n === 0) return stroke;
+
+            // 始点効果
+            if (stroke.startEffect === 'tome') {
+                for (let i = 0; i < Math.min(5, n); i++) {
+                    stroke.points[i].width *= (1.5 - 0.1 * i);
+                }
+            }
+
+            // 終点効果
+            if (stroke.endEffect === 'tome') {
+                for (let i = Math.max(0, n - 5); i < n; i++) {
+                    stroke.points[i].width *= (1.0 + 0.1 * (i - (n - 5)));
+                }
+            } else if (stroke.endEffect === 'hane') {
+                for (let i = Math.max(0, n - 8); i < n; i++) {
+                    const progress = (i - (n - 8)) / 8;
+                    stroke.points[i].width *= (1 - progress * 0.8);
+                    stroke.points[i].y -= progress * 3;
+                }
+            } else if (stroke.endEffect === 'harai') {
+                const haraiStart = Math.max(0, Math.floor(n - n / 3));
+                for (let i = haraiStart; i < n; i++) {
+                    const progress = (i - haraiStart) / (n - haraiStart);
+                    stroke.points[i].width *= (1 - progress * 0.9);
+                }
+            }
+
+            return stroke;
+        }
+
+        // ==================== SVG取得 ====================
+        async function fetchKanjiSVG(char) {
+            const hex = char.codePointAt(0).toString(16).padStart(5, '0');
+
+            // animCJKから取得
+            try {
+                const url = `https://raw.githubusercontent.com/parsimonhi/animCJK/master/svgsJa/${hex}.svg`;
+                const res = await fetch(url);
+                if (res.ok) return await res.text();
+            } catch (e) {}
+
+            // KanjiVGから取得
+            try {
+                const url = `https://raw.githubusercontent.com/KanjiVG/kanjivg/master/kanji/${hex}.svg`;
+                const res = await fetch(url);
+                if (res.ok) return await res.text();
+            } catch (e) {}
+
+            return null;
+        }
+
+        function extractPathsFromSVG(svgText) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(svgText, 'image/svg+xml');
+            const paths = [];
+
+            doc.querySelectorAll('path').forEach(el => {
+                const d = el.getAttribute('d');
+                if (d) paths.push(d);
+            });
+
+            return paths;
+        }
+
+        // ==================== メイン機能 ====================
+        function updateProgress(current, total, charName) {
+            const progressContainer = document.getElementById('progress-container');
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+
+            progressContainer.classList.add('show');
+            const percent = total > 0 ? (current / total) * 100 : 0;
+            progressFill.style.width = percent + '%';
+            progressText.textContent = `${current} / ${total} 文字 ${charName ? '(' + charName + ')' : ''}`;
+        }
+
+        function hideProgress() {
+            document.getElementById('progress-container').classList.remove('show');
+            document.getElementById('progress-fill').style.width = '0%';
+        }
+
+        async function extractPaths() {
+            const text = document.getElementById('char-input').value.trim();
+            if (!text) {
+                showStatus('文字を入力してください');
+                return;
+            }
+
+            // 改行と空白を除去して文字リストを作成
+            const charList = text.replace(/[\s\n\r]/g, '').split('');
+            const totalChars = charList.length;
+
+            if (totalChars === 0) {
+                showStatus('文字を入力してください');
+                return;
+            }
+
+            // ボタンを無効化
+            const extractBtn = document.getElementById('extract-btn');
+            extractBtn.disabled = true;
+            extractBtn.textContent = '抽出中...';
+
+            characters = [];
+            selectedCharIndex = -1;
+            selectedStrokeIndex = -1;
+            selectedPointIndex = -1;
+
+            const baseWidth = parseFloat(document.getElementById('base-width').value);
+            const curveFactor = parseFloat(document.getElementById('curve-factor').value);
+
+            updateProgress(0, totalChars, '');
+
+            for (let i = 0; i < charList.length; i++) {
+                const char = charList[i];
+                updateProgress(i, totalChars, char);
+
+                // UIを更新するために少し待機
+                await new Promise(resolve => setTimeout(resolve, 10));
+
+                const svg = await fetchKanjiSVG(char);
+                const character = { char, strokes: [], originalPaths: [] };
+
+                if (svg) {
+                    const pathDs = extractPathsFromSVG(svg);
+                    character.originalPaths = pathDs;
+
+                    for (const d of pathDs) {
+                        const pointLists = parseSVGPath(d);
+                        for (const points of pointLists) {
+                            if (points.length >= 2) {
+                                const stroke = pointsToStroke(points, baseWidth, curveFactor);
+                                character.strokes.push(stroke);
+                            }
+                        }
+                    }
+                }
+
+                characters.push(character);
+            }
+
+            updateProgress(totalChars, totalChars, '完了');
+
+            // ボタンを有効化
+            extractBtn.disabled = false;
+            extractBtn.textContent = 'パス抽出';
+
+            // 少し待ってからプログレスバーを非表示
+            setTimeout(() => {
+                hideProgress();
+            }, 1000);
+
+            updateStrokeList();
+            updatePreview();
+            showStatus(`${characters.reduce((a, c) => a + c.strokes.length, 0)} 画を抽出しました`);
+        }
+
+        function updateStrokeList() {
+            const list = document.getElementById('stroke-list');
+            list.innerHTML = '';
+
+            let idx = 0;
+            for (const char of characters) {
+                for (let i = 0; i < char.strokes.length; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'stroke-item';
+                    div.textContent = `${char.char} - 第${i + 1}画`;
+                    div.dataset.index = idx;
+                    div.onclick = () => selectStroke(parseInt(div.dataset.index));
+                    list.appendChild(div);
+                    idx++;
+                }
+            }
+        }
+
+        function selectStroke(index) {
+            document.querySelectorAll('.stroke-item').forEach((el, i) => {
+                el.classList.toggle('selected', i === index);
+            });
+
+            let count = 0;
+            for (let ci = 0; ci < characters.length; ci++) {
+                for (let si = 0; si < characters[ci].strokes.length; si++) {
+                    if (count === index) {
+                        selectedCharIndex = ci;
+                        selectedStrokeIndex = si;
+                        selectedPointIndex = -1;
+
+                        const stroke = characters[ci].strokes[si];
+                        document.getElementById('start-effect').value = stroke.startEffect;
+                        document.getElementById('end-effect').value = stroke.endEffect;
+
+                        updatePreview();
+                        return;
+                    }
+                    count++;
+                }
+            }
+        }
+
+        function onEffectChange() {
+            if (selectedCharIndex < 0 || selectedStrokeIndex < 0) return;
+
+            const stroke = characters[selectedCharIndex].strokes[selectedStrokeIndex];
+            stroke.startEffect = document.getElementById('start-effect').value;
+            stroke.endEffect = document.getElementById('end-effect').value;
+
+            // 再計算
+            const baseWidth = parseFloat(document.getElementById('base-width').value);
+            const curveFactor = parseFloat(document.getElementById('curve-factor').value);
+            const char = characters[selectedCharIndex];
+
+            if (selectedStrokeIndex < char.originalPaths.length) {
+                const d = char.originalPaths[selectedStrokeIndex];
+                const pointLists = parseSVGPath(d);
+                if (pointLists.length > 0) {
+                    const newStroke = pointsToStroke(pointLists[0], baseWidth, curveFactor);
+                    newStroke.startEffect = stroke.startEffect;
+                    newStroke.endEffect = stroke.endEffect;
+                    applyEffects(newStroke);
+                    char.strokes[selectedStrokeIndex] = newStroke;
+                }
+            }
+
+            updatePreview();
+        }
+
+        function onWidthChange() {
+            const baseWidth = parseFloat(document.getElementById('base-width').value);
+            const curveFactor = parseFloat(document.getElementById('curve-factor').value);
+
+            document.getElementById('base-width-value').textContent = baseWidth.toFixed(2) + 'mm';
+            document.getElementById('curve-factor-value').textContent = curveFactor.toFixed(1);
+
+            // 全ストローク再計算
+            for (const char of characters) {
+                for (let i = 0; i < char.strokes.length; i++) {
+                    if (i < char.originalPaths.length) {
+                        const d = char.originalPaths[i];
+                        const pointLists = parseSVGPath(d);
+                        if (pointLists.length > 0) {
+                            const oldStroke = char.strokes[i];
+                            const newStroke = pointsToStroke(pointLists[0], baseWidth, curveFactor);
+                            newStroke.startEffect = oldStroke.startEffect;
+                            newStroke.endEffect = oldStroke.endEffect;
+                            applyEffects(newStroke);
+                            char.strokes[i] = newStroke;
+                        }
+                    }
+                }
+            }
+
+            updatePreview();
+        }
+
+        function onLayoutChange() {
+            document.getElementById('char-size-value').textContent = document.getElementById('char-size').value + 'mm';
+            document.getElementById('char-spacing-value').textContent = document.getElementById('char-spacing').value + 'mm';
+            document.getElementById('line-spacing-value').textContent = document.getElementById('line-spacing').value + 'mm';
+            document.getElementById('chars-per-line-value').textContent = document.getElementById('chars-per-line').value + '文字';
+            document.getElementById('start-x-value').textContent = document.getElementById('start-x').value + 'mm';
+            document.getElementById('start-y-value').textContent = document.getElementById('start-y').value + 'mm';
+            updatePreview();
+        }
+
+        // レイアウト計算: 各文字の配置位置を返す
+        function calculateLayout() {
+            const charSize = parseFloat(document.getElementById('char-size').value);
+            const charSpacing = parseFloat(document.getElementById('char-spacing').value);
+            const lineSpacing = parseFloat(document.getElementById('line-spacing').value);
+            const charsPerLine = parseInt(document.getElementById('chars-per-line').value);
+            const startX = parseFloat(document.getElementById('start-x').value);
+            const startY = parseFloat(document.getElementById('start-y').value);
+            const direction = document.getElementById('writing-direction').value;
+
+            const layout = [];
+            for (let i = 0; i < characters.length; i++) {
+                const lineIndex = Math.floor(i / charsPerLine);
+                const charIndex = i % charsPerLine;
+
+                let x, y;
+                if (direction === 'vertical') {
+                    // 縦書き: 上から下、右から左
+                    // 最初の列は右端から始まる
+                    x = startX - lineIndex * (charSize + lineSpacing);
+                    y = startY - charIndex * (charSize + charSpacing);
+                } else {
+                    // 横書き: 左から右、上から下
+                    x = startX + charIndex * (charSize + charSpacing);
+                    y = startY - lineIndex * (charSize + lineSpacing);
+                }
+
+                layout.push({
+                    charIndex: i,
+                    x: x,
+                    y: y,
+                    size: charSize
+                });
+            }
+            return layout;
+        }
+
+        // ==================== プレビュー ====================
+        // ベッドサイズ 180x180mm を canvas サイズ 600x600px にマッピング
+        const BED_SIZE = 180;  // mm
+        const CANVAS_SIZE = 600;  // px
+        const MM_TO_PX = CANVAS_SIZE / BED_SIZE;  // 約3.33 px/mm
+
+        function updatePreview() {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 10mmグリッド描画
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            const gridSpacing = 10 * MM_TO_PX;  // 10mm間隔
+
+            for (let i = 0; i <= BED_SIZE; i += 10) {
+                const pos = i * MM_TO_PX;
+
+                // 縦線
+                ctx.beginPath();
+                ctx.moveTo(pos, 0);
+                ctx.lineTo(pos, canvas.height);
+                ctx.stroke();
+
+                // 横線
+                ctx.beginPath();
+                ctx.moveTo(0, pos);
+                ctx.lineTo(canvas.width, pos);
+                ctx.stroke();
+            }
+
+            // 50mm区切りの太線
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 2;
+            for (let i = 0; i <= BED_SIZE; i += 50) {
+                const pos = i * MM_TO_PX;
+                ctx.beginPath();
+                ctx.moveTo(pos, 0);
+                ctx.lineTo(pos, canvas.height);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, pos);
+                ctx.lineTo(canvas.width, pos);
+                ctx.stroke();
+            }
+
+            // 座標ラベル
+            ctx.fillStyle = '#999';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            for (let i = 0; i <= BED_SIZE; i += 50) {
+                const pos = i * MM_TO_PX;
+                ctx.fillText(i + '', pos, 12);  // X軸ラベル
+                ctx.fillText(i + '', 12, canvas.height - pos + 4);  // Y軸ラベル
+            }
+
+            // レイアウト計算
+            const layout = calculateLayout();
+            const charSize = parseFloat(document.getElementById('char-size').value);
+
+            // SVGは0-109の座標系なので、charSizeへスケーリング
+            const svgScale = charSize / 109;
+
+            // ストローク描画
+            for (let ci = 0; ci < characters.length; ci++) {
+                const charLayout = layout[ci];
+                if (!charLayout) continue;
+
+                for (let si = 0; si < characters[ci].strokes.length; si++) {
+                    const stroke = characters[ci].strokes[si];
+                    const isSelected = (ci === selectedCharIndex && si === selectedStrokeIndex);
+
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+
+                    for (let i = 0; i < stroke.points.length - 1; i++) {
+                        const p1 = stroke.points[i];
+                        const p2 = stroke.points[i + 1];
+
+                        // SVG座標 → mm座標 → px座標
+                        // SVGはY軸が下向き(0-109)なので、(109 - p.y)で反転してから文字位置に加算
+                        const x1 = (charLayout.x + p1.x * svgScale) * MM_TO_PX;
+                        const y1 = canvas.height - (charLayout.y + (109 - p1.y) * svgScale) * MM_TO_PX;
+                        const x2 = (charLayout.x + p2.x * svgScale) * MM_TO_PX;
+                        const y2 = canvas.height - (charLayout.y + (109 - p2.y) * svgScale) * MM_TO_PX;
+
+                        // 太さもmm→pxに変換
+                        const width = ((p1.width + p2.width) / 2) * MM_TO_PX * 3;
+
+                        ctx.strokeStyle = isSelected ? '#e94560' : '#333';
+                        ctx.lineWidth = Math.max(1, width);
+
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+
+                    // 選択ストロークの点を表示
+                    if (isSelected) {
+                        for (let i = 0; i < stroke.points.length; i++) {
+                            const p = stroke.points[i];
+                            const px = (charLayout.x + p.x * svgScale) * MM_TO_PX;
+                            const py = canvas.height - (charLayout.y + (109 - p.y) * svgScale) * MM_TO_PX;
+
+                            ctx.beginPath();
+                            ctx.arc(px, py, i === selectedPointIndex ? 7 : 4, 0, Math.PI * 2);
+                            ctx.fillStyle = i === selectedPointIndex ? '#00ff00' : '#3282b8';
+                            ctx.fill();
+                            ctx.strokeStyle = '#fff';
+                            ctx.lineWidth = 1;
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // 各文字の境界ボックス（レイアウト確認用）
+                ctx.strokeStyle = '#ddd';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                const boxX = charLayout.x * MM_TO_PX;
+                const boxY = canvas.height - (charLayout.y + charSize) * MM_TO_PX;
+                ctx.strokeRect(boxX, boxY, charSize * MM_TO_PX, charSize * MM_TO_PX);
+                ctx.setLineDash([]);
+            }
+
+            // 文字表示（右下に小さく）
+            if (characters.length > 0) {
+                ctx.fillStyle = '#666';
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText('文字: ' + characters.map(c => c.char).join(''), canvas.width - 10, canvas.height - 10);
+            }
+        }
+
+        // ==================== キャンバスイベント ====================
+        // 文字の塊全体の境界ボックスを計算
+        function getLayoutBoundingBox() {
+            if (characters.length === 0) return null;
+            const layout = calculateLayout();
+            const charSize = parseFloat(document.getElementById('char-size').value);
+
+            let minX = Infinity, minY = Infinity;
+            let maxX = -Infinity, maxY = -Infinity;
+
+            for (const charLayout of layout) {
+                minX = Math.min(minX, charLayout.x);
+                minY = Math.min(minY, charLayout.y);
+                maxX = Math.max(maxX, charLayout.x + charSize);
+                maxY = Math.max(maxY, charLayout.y + charSize);
+            }
+
+            return { minX, minY, maxX, maxY };
+        }
+
+        // クリック位置が文字の塊の境界ボックス内かチェック
+        function isInsideLayoutBox(clickX, clickY) {
+            const bbox = getLayoutBoundingBox();
+            if (!bbox) return false;
+
+            // px座標をmm座標に変換
+            const mmX = clickX / MM_TO_PX;
+            const mmY = (canvas.height - clickY) / MM_TO_PX;
+
+            // 境界にマージンを追加（クリックしやすく）
+            const margin = 5;
+            return mmX >= bbox.minX - margin && mmX <= bbox.maxX + margin &&
+                   mmY >= bbox.minY - margin && mmY <= bbox.maxY + margin;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            // まず、選択されたストロークの点をクリックしたかチェック
+            if (selectedCharIndex >= 0 && selectedStrokeIndex >= 0) {
+                const layout = calculateLayout();
+                const charSize = parseFloat(document.getElementById('char-size').value);
+                const svgScale = charSize / 109;
+                const charLayout = layout[selectedCharIndex];
+
+                if (charLayout) {
+                    const stroke = characters[selectedCharIndex].strokes[selectedStrokeIndex];
+                    let minDist = Infinity;
+                    let closestIdx = -1;
+
+                    for (let i = 0; i < stroke.points.length; i++) {
+                        const p = stroke.points[i];
+                        const px = (charLayout.x + p.x * svgScale) * MM_TO_PX;
+                        const py = canvas.height - (charLayout.y + (109 - p.y) * svgScale) * MM_TO_PX;
+                        const dist = Math.hypot(clickX - px, clickY - py);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestIdx = i;
+                        }
+                    }
+
+                    if (minDist < 25) {
+                        selectedPointIndex = closestIdx;
+                        isDragging = true;
+                        isDraggingLayout = false;
+                        updatePointEditor();
+                        updatePreview();
+                        return;
+                    }
+                }
+            }
+
+            // 文字の塊全体をドラッグ開始
+            if (characters.length > 0 && isInsideLayoutBox(clickX, clickY)) {
+                isDraggingLayout = true;
+                isDragging = false;
+                dragStartX = clickX;
+                dragStartY = clickY;
+                dragStartLayoutX = parseFloat(document.getElementById('start-x').value);
+                dragStartLayoutY = parseFloat(document.getElementById('start-y').value);
+                canvas.style.cursor = 'grabbing';
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const moveX = e.clientX - rect.left;
+            const moveY = e.clientY - rect.top;
+
+            // 文字の塊全体をドラッグ中
+            if (isDraggingLayout) {
+                const deltaX = (moveX - dragStartX) / MM_TO_PX;
+                const deltaY = -(moveY - dragStartY) / MM_TO_PX;  // Y軸は反転
+
+                let newX = dragStartLayoutX + deltaX;
+                let newY = dragStartLayoutY + deltaY;
+
+                // 範囲制限
+                newX = Math.max(5, Math.min(170, newX));
+                newY = Math.max(5, Math.min(170, newY));
+
+                document.getElementById('start-x').value = Math.round(newX);
+                document.getElementById('start-y').value = Math.round(newY);
+                onLayoutChange();
+                return;
+            }
+
+            // 点をドラッグ中
+            if (isDragging && selectedPointIndex >= 0) {
+                const layout = calculateLayout();
+                const charSize = parseFloat(document.getElementById('char-size').value);
+                const svgScale = charSize / 109;
+                const charLayout = layout[selectedCharIndex];
+                if (!charLayout) return;
+
+                const stroke = characters[selectedCharIndex].strokes[selectedStrokeIndex];
+                // px → mm → SVG座標への変換
+                const mmX = moveX / MM_TO_PX;
+                const mmY = (canvas.height - moveY) / MM_TO_PX;
+                stroke.points[selectedPointIndex].x = (mmX - charLayout.x) / svgScale;
+                stroke.points[selectedPointIndex].y = 109 - (mmY - charLayout.y) / svgScale;
+
+                updatePointEditor();
+                updatePreview();
+                return;
+            }
+
+            // カーソル変更（文字の塊の上にいるとき）
+            if (characters.length > 0 && isInsideLayoutBox(moveX, moveY)) {
+                canvas.style.cursor = 'grab';
+            } else {
+                canvas.style.cursor = 'crosshair';
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            isDraggingLayout = false;
+            canvas.style.cursor = 'crosshair';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            isDraggingLayout = false;
+            canvas.style.cursor = 'crosshair';
+        });
+
+        function updatePointEditor() {
+            if (selectedPointIndex < 0 || selectedCharIndex < 0 || selectedStrokeIndex < 0) return;
+
+            const p = characters[selectedCharIndex].strokes[selectedStrokeIndex].points[selectedPointIndex];
+            document.getElementById('point-x').value = p.x.toFixed(2);
+            document.getElementById('point-y').value = p.y.toFixed(2);
+            document.getElementById('point-width').value = p.width.toFixed(3);
+        }
+
+        function onPointEdit() {
+            if (selectedPointIndex < 0 || selectedCharIndex < 0 || selectedStrokeIndex < 0) return;
+
+            const p = characters[selectedCharIndex].strokes[selectedStrokeIndex].points[selectedPointIndex];
+            p.x = parseFloat(document.getElementById('point-x').value) || p.x;
+            p.y = parseFloat(document.getElementById('point-y').value) || p.y;
+            p.width = parseFloat(document.getElementById('point-width').value) || p.width;
+
+            updatePreview();
+        }
+
+        function addPoint() {
+            if (selectedCharIndex < 0 || selectedStrokeIndex < 0) return;
+
+            const stroke = characters[selectedCharIndex].strokes[selectedStrokeIndex];
+            const insertIdx = selectedPointIndex < 0 ? stroke.points.length : selectedPointIndex + 1;
+
+            let newX, newY, newWidth;
+            if (insertIdx > 0 && insertIdx <= stroke.points.length) {
+                const prev = stroke.points[insertIdx - 1];
+                if (insertIdx < stroke.points.length) {
+                    const next = stroke.points[insertIdx];
+                    newX = (prev.x + next.x) / 2;
+                    newY = (prev.y + next.y) / 2;
+                    newWidth = (prev.width + next.width) / 2;
+                } else {
+                    newX = prev.x + 5;
+                    newY = prev.y;
+                    newWidth = prev.width;
+                }
+            } else {
+                newX = 50;
+                newY = 50;
+                newWidth = parseFloat(document.getElementById('base-width').value);
+            }
+
+            stroke.points.splice(insertIdx, 0, { x: newX, y: newY, width: newWidth, curvature: 0 });
+            selectedPointIndex = insertIdx;
+            updatePreview();
+            updatePointEditor();
+        }
+
+        function deletePoint() {
+            if (selectedPointIndex < 0 || selectedCharIndex < 0 || selectedStrokeIndex < 0) return;
+
+            const stroke = characters[selectedCharIndex].strokes[selectedStrokeIndex];
+            if (stroke.points.length > 2) {
+                stroke.points.splice(selectedPointIndex, 1);
+                selectedPointIndex = Math.min(selectedPointIndex, stroke.points.length - 1);
+                updatePreview();
+                updatePointEditor();
+            }
+        }
+
+        // ==================== G-code生成 ====================
+        // 参考ファイルから完全コピーしたスタートG-code
+        function getStartGcode(layerHeight) {
+            return `; HEADER_BLOCK_START
+; Shodo 3D Printer for Bambu Lab A1 mini
+; total layer number: 1
+; max_z_height: ${layerHeight}
+; HEADER_BLOCK_END
+
+; CONFIG_BLOCK_START
+; nozzle_diameter = 0.2
+; filament_diameter = 1.75
+; layer_height = ${layerHeight}
+; CONFIG_BLOCK_END
+
+; EXECUTABLE_BLOCK_START
+M73 P0 R5
+M201 X20000 Y20000 Z1500 E5000
+M203 X500 Y500 Z30 E30
+M204 P20000 R5000 T20000
+M205 X9.00 Y9.00 Z5.00 E3.00
+M106 S0
+M106 P2 S0
+; FEATURE: Custom
+;===== machine: A1 mini =========================
+;===== date: 20240620 =====================
+
+;===== start to heat heatbead&hotend==========
+M1002 gcode_claim_action : 2
+M1002 set_filament_type:PLA
+M104 S170
+M140 S60
+G392 S0 ;turn off clog detect
+M9833.2
+;=====start printer sound ===================
+M17
+M400 S1
+M1006 S1
+M1006 A0 B0 L100 C37 D10 M100 E37 F10 N100
+M1006 A0 B0 L100 C41 D10 M100 E41 F10 N100
+M1006 A0 B0 L100 C44 D10 M100 E44 F10 N100
+M1006 A0 B10 L100 C0 D10 M100 E0 F10 N100
+M1006 A43 B10 L100 C39 D10 M100 E46 F10 N100
+M1006 A0 B0 L100 C0 D10 M100 E0 F10 N100
+M1006 A0 B0 L100 C39 D10 M100 E43 F10 N100
+M1006 A0 B0 L100 C0 D10 M100 E0 F10 N100
+M1006 A0 B0 L100 C41 D10 M100 E41 F10 N100
+M1006 A0 B0 L100 C44 D10 M100 E44 F10 N100
+M1006 A0 B0 L100 C49 D10 M100 E49 F10 N100
+M1006 A0 B0 L100 C0 D10 M100 E0 F10 N100
+M1006 A44 B10 L100 C39 D10 M100 E48 F10 N100
+M1006 A0 B0 L100 C0 D10 M100 E0 F10 N100
+M1006 A0 B0 L100 C39 D10 M100 E44 F10 N100
+M1006 A0 B0 L100 C0 D10 M100 E0 F10 N100
+M1006 A43 B10 L100 C39 D10 M100 E46 F10 N100
+M1006 W
+M18
+;=====avoid end stop =================
+G91
+G380 S2 Z30 F1200
+G380 S3 Z-20 F1200
+G1 Z5 F1200
+G90
+
+;===== reset machine status =================
+M204 S6000
+
+M630 S0 P0
+G91
+M17 Z0.3 ; lower the z-motor current
+
+G90
+M17 X0.7 Y0.9 Z0.5 ; reset motor current to default
+M960 S5 P1 ; turn on logo lamp
+G90
+M83
+M220 S100 ;Reset Feedrate
+M221 S100 ;Reset Flowrate
+M73.2   R1.0 ;Reset left time magnitude
+;====== cog noise reduction=================
+M982.2 S1 ; turn on cog noise reduction
+
+;===== prepare print temperature and material ==========
+M400
+M18
+M109 S100 H170
+M104 S170
+M400
+M17
+M400
+G28 X
+
+M211 X0 Y0 Z0 ;turn off soft endstop
+M975 S1
+
+G1 X0.0 F30000
+G1 X-13.5 F3000
+
+;===== Skip AMS section for direct extruder =====
+; M620/M621 AMS blocks removed - using direct extruder only
+M1002 set_filament_type:PLA
+M109 S220 ;wait for hotend temp
+G392 S0 ;turn off clog detect
+
+M400
+M106 P1 S0
+;===== prepare print temperature and material end =====
+
+
+;===== mech mode fast check============================
+M1002 gcode_claim_action : 3
+G0 X25 Y175 F20000 ; find a soft place to home
+G28 Z P0 T300; home z with low precision,permit 300deg temperature
+G29.2 S0 ; turn off ABL
+M104 S170
+
+; build plate detect
+M1002 judge_flag build_plate_detect_flag
+M622 S1
+  G39.4
+  M400
+M623
+
+G1 Z5 F3000
+G1 X90 Y-1 F30000
+M400 P200
+M970.3 Q1 A7 K0 O2
+M974 Q1 S2 P0
+
+G1 X90 Y0 Z5 F30000
+M400 P200
+M970 Q0 A10 B50 C90 H15 K0 M20 O3
+M974 Q0 S2 P0
+
+M975 S1
+G1 F30000
+G1 X-1 Y10
+G28 X ; re-home XY
+
+;===== wipe nozzle ===============================
+M1002 gcode_claim_action : 14
+M975 S1
+
+M104 S170 ; set temp down to heatbed acceptable
+M106 S255 ; turn on fan (G28 has turn off fan)
+M211 S; push soft endstop status
+M211 X0 Y0 Z0 ;turn off Z axis endstop
+
+M83
+G1 E-1 F500
+G90
+M83
+
+M109 S170
+M104 S140
+G0 X90 Y-4 F30000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X91 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X92 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X93 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X94 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X95 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X96 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X97 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X98 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X99 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X99 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X99 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X99 F10000
+G380 S3 Z-5 F1200
+G1 Z2 F1200
+G1 X99 F10000
+G380 S3 Z-5 F1200
+
+G1 Z5 F30000
+G1 X25 Y175 F30000.1 ;Brush material
+G1 Z0.2 F30000.1
+G1 Y185
+G91
+G1 X-30 F30000
+G1 Y-2
+G1 X27
+G1 Y1.5
+G1 X-28
+G1 Y-2
+G1 X30
+G1 Y1.5
+G1 X-30
+G90
+M83
+
+G1 Z5 F3000
+G0 X50 Y175 F20000 ; find a soft place to home
+G28 Z P0 T300; home z with low precision, permit 300deg temperature
+G29.2 S0 ; turn off ABL
+
+G0 X85 Y185 F10000 ;move to exposed steel surface and stop the nozzle
+G0 Z-1.01 F10000
+G91
+
+G2 I1 J0 X2 Y0 F2000.1
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+G2 I1 J0 X2
+G2 I-0.75 J0 X-1.5
+
+G90
+G1 Z5 F30000
+G1 X25 Y175 F30000.1 ;Brush material
+G1 Z0.2 F30000.1
+G1 Y185
+G91
+G1 X-30 F30000
+G1 Y-2
+G1 X27
+G1 Y1.5
+G1 X-28
+G1 Y-2
+G1 X30
+G1 Y1.5
+G1 X-30
+G90
+M83
+
+G1 Z5
+G0 X55 Y175 F20000 ; find a soft place to home
+G28 Z P0 T300; home z with low precision, permit 300deg temperature
+G29.2 S0 ; turn off ABL
+
+G1 Z10
+G1 X85 Y185
+G1 Z-1.01
+G1 X95
+G1 X90
+
+M211 R; pop softend status
+
+M106 S0 ; turn off fan , too noisy
+;===== wipe nozzle end ================================
+
+
+;===== wait heatbed  ====================
+M1002 gcode_claim_action : 2
+M104 S0
+M190 S60;set bed temp
+M109 S140
+
+G1 Z5 F3000
+G29.2 S1
+G1 X10 Y10 F20000
+
+;===== bed leveling ==================================
+M1002 judge_flag g29_before_print_flag
+M622 J1
+    M1002 gcode_claim_action : 1
+    G29 A1 X81 Y81 I18 J18
+    M400
+    M500 ; save cali data
+M623
+;===== bed leveling end ================================
+
+;===== home after wipe mouth============================
+M1002 judge_flag g29_before_print_flag
+M622 J0
+
+    M1002 gcode_claim_action : 13
+    G28 T145
+
+M623
+
+;===== home after wipe mouth end =======================
+
+M975 S1 ; turn on vibration supression
+;===== nozzle load line (simplified for direct extruder) ===============================
+M975 S1
+G90
+M83
+T1000
+
+M412 S1 ;    ===turn on  filament runout detection===
+M400 P10
+
+G392 S0 ;turn on clog detect
+
+M1002 set_filament_type:PLA
+
+;===== simple purge line ===============================
+M104 S220
+M109 S220 ;wait for hotend temp
+G90
+M83
+G92 E0
+G0 X5 Y5 Z0.3 F10000 ;Move to purge start position
+G1 X50 E3 F600 ;draw purge line (only 3mm extrusion)
+G1 Z0.5 F3000 ;lift nozzle
+G92 E0
+
+;========turn off light and wait extrude temperature =============
+M1002 gcode_claim_action : 0
+
+M400 ; wait all motion done before implement the emprical L parameters
+
+M960 S1 P0 ; turn off laser
+M960 S2 P0 ; turn off laser
+M106 S0 ; turn off fan
+M106 P2 S0 ; turn off big fan
+M106 P3 S0 ; turn off chamber fan
+
+M975 S1 ; turn on mech mode supression
+G90
+M83
+T1000
+
+M211 X0 Y0 Z0 ;turn off soft endstop
+M1007 S1
+
+; MACHINE_START_GCODE_END
+; filament start gcode
+M106 P3 S200
+
+
+;VT0
+G90
+G21
+M83 ; use relative distances for extrusion
+M981 S1 P20000 ;open spaghetti detector
+; CHANGE_LAYER
+; Z_HEIGHT: ${layerHeight}
+; LAYER_HEIGHT: ${layerHeight}
+G1 E-.6 F1800
+; layer num/total_layer_count: 1/1
+; update layer progress
+M73 L1
+M991 S0 P0 ;notify layer change
+
+M106 S0
+M106 P2 S0
+`;
+        }
+
+        // 参考ファイルから完全コピーしたエンドG-code
+        function getEndGcode(maxZ) {
+            const safeZ = Math.min(maxZ + 0.5, 175);
+            const finalZ = Math.min(maxZ + 50, 175);
+            return `
+;===== date: 20231229 =====================
+;turn off nozzle clog detect
+G392 S0
+
+M400 ; wait for buffer to clear
+G92 E0 ; zero the extruder
+G1 E-0.8 F1800 ; retract
+G1 Z${safeZ} F900 ; lower z a little
+G1 X0 Y90 F18000 ; move to safe pos
+G1 X-13.0 F3000 ; move to safe pos
+
+M140 S0 ; turn off bed
+M106 S0 ; turn off fan
+M106 P2 S0 ; turn off remote part cooling fan
+M106 P3 S0 ; turn off chamber cooling fan
+
+M104 S0 ; turn off hotend
+
+M400 ; wait all motion done
+M17 S
+M17 Z0.4 ; lower z motor current to reduce impact if there is something in the bottom
+
+G1 Z${finalZ} F600
+G1 Z${Math.max(finalZ - 2, safeZ)}
+
+M400 P100
+M17 R ; restore z current
+
+G90
+G1 X-13 Y180 F3600
+
+G91
+G1 Z-1 F600
+G90
+M83
+
+M220 S100  ; Reset feedrate magnitude
+M201.2 K1.0 ; Reset acc magnitude
+M73.2   R1.0 ;Reset left time magnitude
+M1002 set_gcode_claim_speed_level : 0
+
+;=====printer finish  sound=========
+M17
+M400 S1
+M1006 S1
+M1006 A0 B20 L100 C37 D20 M100 E42 F20 N100
+M1006 A0 B10 L100 C44 D10 M100 E44 F10 N100
+M1006 A0 B10 L100 C46 D10 M100 E46 F10 N100
+M1006 A44 B20 L100 C39 D20 M100 E48 F20 N100
+M1006 A0 B10 L100 C44 D10 M100 E44 F10 N100
+M1006 A0 B10 L100 C0 D10 M100 E0 F10 N100
+M1006 A0 B10 L100 C39 D10 M100 E39 F10 N100
+M1006 A0 B10 L100 C0 D10 M100 E0 F10 N100
+M1006 A0 B10 L100 C44 D10 M100 E44 F10 N100
+M1006 A0 B10 L100 C0 D10 M100 E0 F10 N100
+M1006 A0 B10 L100 C39 D10 M100 E39 F10 N100
+M1006 A0 B10 L100 C0 D10 M100 E0 F10 N100
+M1006 A44 B10 L100 C0 D10 M100 E48 F10 N100
+M1006 A0 B10 L100 C0 D10 M100 E0 F10 N100
+M1006 A44 B20 L100 C41 D20 M100 E49 F20 N100
+M1006 A0 B20 L100 C0 D20 M100 E0 F20 N100
+M1006 A0 B20 L100 C37 D20 M100 E37 F20 N100
+M1006 W
+;=====printer finish  sound=========
+M400 S1
+M18 X Y Z
+M73 P100 R0
+; EXECUTABLE_BLOCK_END
+`;
+        }
+
+        function generateGcode() {
+            if (characters.length === 0) {
+                showStatus('先に文字を入力してパスを抽出してください');
+                return;
+            }
+
+            const layerHeight = parseFloat(document.getElementById('layer-height').value);
+            const zHeight = parseFloat(document.getElementById('z-height').value);
+            const printSpeed = parseInt(document.getElementById('print-speed').value);
+            const enableRetract = document.getElementById('enable-retract').checked;
+
+            // レイアウト設定を取得
+            const layout = calculateLayout();
+            const charSize = parseFloat(document.getElementById('char-size').value);
+            const svgScale = charSize / 109;  // SVGは0-109の座標系
+
+            const nozzleDiameter = 0.2;
+            const filamentDiameter = 1.75;
+            const lineWidth = 0.3;  // 太めに設定
+            const flowRatio = 1.5;  // 押し出し量を増やす（書道用に多め）
+            const retractLength = 0.6;
+            const travelSpeed = 700;
+
+            let gcode = [];
+
+            // Bambu Lab用スタートG-code
+            gcode.push(getStartGcode(layerHeight));
+
+            const filamentArea = Math.PI * Math.pow(filamentDiameter / 2, 2);
+
+            function calcExtrusion(distance, width) {
+                const crossSection = width * layerHeight;
+                return distance * crossSection / filamentArea * flowRatio;
+            }
+
+            // SVG座標をベッド座標に変換（文字ごとのレイアウト位置を使用）
+            function transformPoint(p, charLayout) {
+                return {
+                    x: charLayout.x + p.x * svgScale,
+                    y: charLayout.y + (109 - p.y) * svgScale  // SVGはY軸が逆
+                };
+            }
+
+            // 書道の印刷部分 - 参考ファイルのパターンに完全準拠
+            // スタートG-codeの最後でリトラクト状態（E-.4）になっている
+            gcode.push('; OBJECT_ID: 1');
+
+            for (let ci = 0; ci < characters.length; ci++) {
+                const char = characters[ci];
+                const charLayout = layout[ci];
+                if (!charLayout) continue;
+
+                gcode.push(`; === Character: ${char.char} (at X${charLayout.x.toFixed(1)} Y${charLayout.y.toFixed(1)}) ===`);
+
+                for (let si = 0; si < char.strokes.length; si++) {
+                    const stroke = char.strokes[si];
+                    if (stroke.points.length < 2) continue;
+
+                    const first = transformPoint(stroke.points[0], charLayout);
+
+                    // 参考ファイルのパターン（行942-951）:
+                    // G1 X98.189 Y98.189 F42000  (XY移動)
+                    // M204 S6000
+                    // G1 Z.4  (Z hop)
+                    // G1 Z.1  (Z down)
+                    // G1 E.4 F1800  (アンリトラクト)
+                    // ; FEATURE: Inner wall
+                    // ; LINE_WIDTH: 0.25
+                    // G1 F960
+                    // M204 S500
+                    // G1 X... Y... E...
+
+                    gcode.push(`G1 X${first.x.toFixed(3)} Y${first.y.toFixed(3)} F42000`);
+                    gcode.push('M204 S6000');
+                    if (enableRetract) {
+                        gcode.push(`G1 Z${(zHeight + 0.3).toFixed(2)}`);  // Z hop
+                    }
+                    gcode.push(`G1 Z${zHeight.toFixed(2)}`);
+                    if (enableRetract) {
+                        gcode.push(`G1 E${retractLength} F1800`);  // アンリトラクト
+                    }
+                    gcode.push(`; FEATURE: Inner wall`);
+                    gcode.push(`; LINE_WIDTH: ${lineWidth}`);
+                    gcode.push(`G1 F${printSpeed * 60}`);  // 速度をmm/minに変換
+                    gcode.push('M204 S300');  // 加速度を下げて滑らかに
+
+                    // ストローク描画（相対押し出し値）
+                    let lastPrinted = transformPoint(stroke.points[0], charLayout);
+                    let accumulatedWidth = stroke.points[0].width;
+                    let widthCount = 1;
+
+                    for (let i = 1; i < stroke.points.length; i++) {
+                        const curr = transformPoint(stroke.points[i], charLayout);
+                        const distance = Math.hypot(curr.x - lastPrinted.x, curr.y - lastPrinted.y);
+
+                        accumulatedWidth += stroke.points[i].width;
+                        widthCount++;
+
+                        if (distance >= 0.3 || i === stroke.points.length - 1) {
+                            if (distance > 0.01) {
+                                const avgWidth = accumulatedWidth / widthCount;
+                                const extrusion = calcExtrusion(distance, avgWidth);
+                                gcode.push(`G1 X${curr.x.toFixed(3)} Y${curr.y.toFixed(3)} E${extrusion.toFixed(5)}`);
+                                lastPrinted = curr;
+                                accumulatedWidth = 0;
+                                widthCount = 0;
+                            }
+                        }
+                    }
+
+                    // ストローク終了時にリトラクト（有効な場合のみ）
+                    if (enableRetract) {
+                        gcode.push(`G1 E-${retractLength} F1800`);
+                    }
+                    gcode.push('M204 S6000');
+                }
+            }
+
+            // Bambu Lab用エンドG-code
+            gcode.push(getEndGcode(layerHeight + 1));
+
+            document.getElementById('gcode-preview').value = gcode.join('\n');
+            showStatus('G-codeを生成しました');
+        }
+
+        function downloadGcode() {
+            const gcode = document.getElementById('gcode-preview').value;
+            if (!gcode) {
+                generateGcode();
+            }
+
+            const finalGcode = document.getElementById('gcode-preview').value;
+            if (!finalGcode) return;
+
+            const blob = new Blob([finalGcode], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'shodo_output.gcode';
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showStatus('G-codeをダウンロードしました');
+        }
+
+        // ==================== ユーティリティ ====================
+        function showStatus(msg) {
+            const status = document.getElementById('status');
+            status.textContent = msg;
+            status.classList.add('show');
+            setTimeout(() => status.classList.remove('show'), 3000);
+        }
+
+        // 初期化
+        updatePreview();
+    </script>
+</body>
+</html>

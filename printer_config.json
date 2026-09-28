@@ -1,0 +1,46 @@
+{
+    "printer_name": "Bambu Lab A1 mini",
+    "nozzle_diameter": 0.2,
+    "filament_diameter": 1.75,
+    "bed_size": {
+        "x": 180,
+        "y": 180
+    },
+    "profiles": {
+        "fine": {
+            "layer_height": 0.06,
+            "line_width": 0.22,
+            "print_speed": 20,
+            "flow_ratio": 0.98,
+            "description": "高精度 (0.06mm) - 細かい文字向け"
+        },
+        "standard": {
+            "layer_height": 0.10,
+            "line_width": 0.22,
+            "print_speed": 30,
+            "flow_ratio": 0.98,
+            "description": "標準 (0.10mm) - バランス重視"
+        },
+        "draft": {
+            "layer_height": 0.14,
+            "line_width": 0.22,
+            "print_speed": 40,
+            "flow_ratio": 0.98,
+            "description": "ドラフト (0.14mm) - テスト印刷向け"
+        }
+    },
+    "gcode_settings": {
+        "hotend_temp": 220,
+        "bed_temp": 60,
+        "retract_length": 0.8,
+        "retract_speed": 30,
+        "travel_speed": 150
+    },
+    "calligraphy_settings": {
+        "base_width": 0.4,
+        "curvature_factor": 5.0,
+        "tome_width_multiplier": 1.5,
+        "harai_taper_length": 0.33,
+        "hane_lift": 2.0
+    }
+}
